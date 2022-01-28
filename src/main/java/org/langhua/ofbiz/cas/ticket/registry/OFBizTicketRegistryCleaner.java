@@ -17,35 +17,24 @@ package org.langhua.ofbiz.cas.ticket.registry;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
-import org.jasig.cas.logout.LogoutManager;
-import org.jasig.cas.ticket.ServiceTicket;
-import org.jasig.cas.ticket.Ticket;
-import org.jasig.cas.ticket.TicketGrantingTicket;
-import org.jasig.cas.ticket.registry.TicketRegistry;
-import org.jasig.cas.ticket.registry.support.LockingStrategy;
-import org.quartz.Job;
-import org.quartz.JobExecutionContext;
-import org.quartz.JobExecutionException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import org.apache.ofbiz.base.util.Debug;
+import org.apereo.cas.logout.LogoutManager;
+import org.apereo.cas.ticket.ServiceTicket;
+import org.apereo.cas.ticket.Ticket;
+import org.apereo.cas.ticket.TicketGrantingTicket;
+import org.apereo.cas.ticket.registry.TicketRegistry;
+import org.apereo.cas.ticket.registry.TicketRegistryCleaner;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.support.SpringBeanAutowiringSupport;
-
 import java.util.Collection;
 
 /**
  * This is OFBizTicketRegistryCleaner.
  *
  */
-@Transactional(transactionManager = "ticketTransactionManager", readOnly = true)
-public class OFBizTicketRegistryCleaner extends TransactionTemplate implements Job {
-
-	private static final long serialVersionUID = 1L;
-
-	protected final Logger logger = LoggerFactory.getLogger(this.getClass());
+public class OFBizTicketRegistryCleaner implements TicketRegistryCleaner {
+    public static final String module = OFBizTicketRegistryCleaner.class.getName();
 
     @Autowired
     @Qualifier("logoutManager")
@@ -54,53 +43,59 @@ public class OFBizTicketRegistryCleaner extends TransactionTemplate implements J
     @Autowired
     @Qualifier("ticketRegistry")
     private TicketRegistry ticketRegistry;
-
-    @Autowired
-    @Qualifier("ofbizLockingStrategy")
-    private LockingStrategy ofbizLockingStrategy;
     
     @Override
-    public void execute(final JobExecutionContext jobExecutionContext) throws JobExecutionException {
+    public void clean() {
         try {
-            SpringBeanAutowiringSupport.processInjectionBasedOnCurrentContext(this);
-
-            logger.info("Beginning ticket cleanup.");
-            logger.debug("Attempting to acquire ticket cleanup lock.");
-            if (!this.ofbizLockingStrategy.acquire()) {
-                logger.info("Could not obtain lock.  Aborting cleanup.");
-                return;
-            }
-            logger.debug("Acquired lock.  Proceeding with cleanup.");
-            
-            logger.info("Beginning ticket cleanup...");
+            Debug.logInfo("Beginning ticket cleanup...", module);
             final Collection<Ticket> ticketsToRemove = Collections2.filter(ticketRegistry.getTickets(), new Predicate<Ticket>() {
                 @Override
                 public boolean apply(final Ticket ticket) {
                     return ticket.isExpired();
                 }
             });
-            logger.info("{} expired tickets found.", ticketsToRemove.size());
+            Debug.logInfo(ticketsToRemove.size() + " expired tickets found.", module);
 
             for (final Ticket ticket : ticketsToRemove) {
                 if (ticket instanceof TicketGrantingTicket) {
-                    logger.debug("Cleaning up expired ticket-granting ticket [{}]", ticket.getId());
+                    Debug.logInfo("Cleaning up expired ticket-granting ticket [" + ticket.getId() + "]", module);
                     logoutManager.performLogout((TicketGrantingTicket) ticket);
                     ticketRegistry.deleteTicket(ticket.getId());
                 } else if (ticket instanceof ServiceTicket) {
-                    logger.debug("Cleaning up expired service ticket [{}]", ticket.getId());
+                    Debug.logInfo("Cleaning up expired service ticket [" + ticket.getId() + "]", module);
                     ticketRegistry.deleteTicket(ticket.getId());
                 } else {
-                    logger.warn("Unknown ticket type [{} found to clean", ticket.getClass().getSimpleName());
+                    Debug.logWarning("Unknown ticket type [" + ticket.getClass().getSimpleName() + "] found to clean", module);
                 }
             }
-            logger.info("{} expired tickets removed.", ticketsToRemove.size());
+            Debug.logInfo(ticketsToRemove.size() + " expired tickets removed.", module);
             
         } catch (final Exception e) {
-            logger.error(e.getMessage(), e);
+            Debug.logError(e.getMessage(), module);
         } finally {
-            logger.debug("Releasing ticket cleanup lock.");
-            this.ofbizLockingStrategy.release();
-            logger.info("Finished ticket cleanup.");
+            Debug.logInfo("Finished ticket cleanup.", module);
         }
     }
+    
+    public int cleanTicket(final Ticket ticket) {
+    	int ticketRemoved = 0;
+    	if (ticket.isExpired()) {
+    		ticketRemoved = ticketRegistry.deleteTicket(ticket.getId());
+    	}
+        return ticketRemoved;
+    }
+
+    private static TicketRegistryCleaner INSTANCE;
+
+    /**
+     * Gets instance.
+     *
+     * @return the instance
+     */
+	public static TicketRegistryCleaner getInstance() {
+        if (INSTANCE == null) {
+            INSTANCE = new OFBizTicketRegistryCleaner();
+        }
+        return INSTANCE;
+	}
 }

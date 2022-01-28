@@ -15,6 +15,7 @@
  *******************************************************************************/
 package org.langhua.ofbiz.cas.authentication;
 
+import org.apache.ofbiz.base.util.Debug;
 import org.apache.ofbiz.base.util.UtilMisc;
 import org.apache.ofbiz.entity.Delegator;
 import org.apache.ofbiz.entity.DelegatorFactory;
@@ -22,43 +23,39 @@ import org.apache.ofbiz.service.GenericServiceException;
 import org.apache.ofbiz.service.LocalDispatcher;
 import org.apache.ofbiz.service.ServiceDispatcher;
 import org.apache.ofbiz.service.ServiceUtil;
-import org.jasig.cas.authentication.HandlerResult;
-import org.jasig.cas.authentication.PreventedException;
-import org.jasig.cas.authentication.UsernamePasswordCredential;
-import org.jasig.cas.authentication.handler.support.AbstractUsernamePasswordAuthenticationHandler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apereo.cas.authentication.AuthenticationHandlerExecutionResult;
+import org.apereo.cas.authentication.PreventedException;
+import org.apereo.cas.authentication.UsernamePasswordCredential;
+import org.apereo.cas.authentication.handler.support.AbstractUsernamePasswordAuthenticationHandler;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 import javax.security.auth.login.FailedLoginException;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.Map;
 
 /**
  * OFBiz Authentication Handler
+ * 
+ * Ref: https://apereo.github.io/2018/06/12/cas53-authn-handlers/
+ * 
  */
-@Component("ofbizAuthenticationHandler")
 public class OFBizAuthenticationHandler extends AbstractUsernamePasswordAuthenticationHandler {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(OFBizAuthenticationHandler.class);
-
+    public static final String module = OFBizAuthenticationHandler.class.getName();
     private Delegator delegator;
-    
     private LocalDispatcher dispatcher;
     
     @Autowired
-    public OFBizAuthenticationHandler(@Value("${default.ofbiz.dispatcher.name:main}")
-                                      final String localDispatcherName,
-                                      @Value("${default.ofbiz.delegator.name:default}")
-                                      final String delegatorName) {
+    public OFBizAuthenticationHandler(final String localDispatcherName, final String delegatorName) {
+    	super(OFBizAuthenticationHandler.class.getSimpleName(), null, null, null);
         this.delegator = DelegatorFactory.getDelegator(delegatorName);
         this.dispatcher = ServiceDispatcher.getLocalDispatcher(localDispatcherName, this.delegator);
     }
 
     @Override
-    protected final HandlerResult authenticateUsernamePasswordInternal(final UsernamePasswordCredential credential)
+	protected AuthenticationHandlerExecutionResult authenticateUsernamePasswordInternal(
+			UsernamePasswordCredential credential, String originalPassword)
             throws GeneralSecurityException, PreventedException {
 
         final String username = credential.getUsername();
@@ -66,12 +63,12 @@ public class OFBizAuthenticationHandler extends AbstractUsernamePasswordAuthenti
         try {
 			Map<String, Object> results = this.dispatcher.runSync("userLogin", UtilMisc.toMap("login.username", username, "login.password", rawPassword));
 			if (!ServiceUtil.isSuccess(results)) {
-				LOGGER.debug("{} failed to login OFBiz.", username);
+				Debug.logInfo("{} failed to login OFBiz.", module, username);
 				throw new GeneralSecurityException(ServiceUtil.getErrorMessage(results), new FailedLoginException());
 			}
 		} catch (GenericServiceException e) {
 			throw new PreventedException(e);
 		}
-        return createHandlerResult(credential, this.principalFactory.createPrincipal(username), null);
+        return createHandlerResult(credential, this.principalFactory.createPrincipal(username), new ArrayList<>());
     }
 }

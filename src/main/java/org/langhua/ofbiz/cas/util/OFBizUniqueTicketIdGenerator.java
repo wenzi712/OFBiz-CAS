@@ -15,25 +15,22 @@
  *******************************************************************************/
 package org.langhua.ofbiz.cas.util;
 
+import org.apache.ofbiz.base.util.Debug;
 import org.apache.ofbiz.entity.Delegator;
 import org.apache.ofbiz.entity.DelegatorFactory;
-import org.jasig.cas.ticket.TicketGrantingTicket;
-import org.jasig.cas.ticket.UniqueTicketIdGenerator;
-import org.jasig.cas.ticket.proxy.ProxyGrantingTicket;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apereo.cas.ticket.TicketGrantingTicket;
+import org.apereo.cas.ticket.UniqueTicketIdGenerator;
+import org.apereo.cas.ticket.proxy.ProxyGrantingTicket;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 /**
  * Unique Ticket Id Generator compliant with OFBiz
  *
  */
-@Component("ofbizTicketGrantingTicketUniqueIdGenerator")
 public final class OFBizUniqueTicketIdGenerator implements UniqueTicketIdGenerator {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(OFBizUniqueTicketIdGenerator.class);
+    public static final String module = OFBizUniqueTicketIdGenerator.class.getName();
 
     private Delegator delegator;
 
@@ -55,7 +52,7 @@ public final class OFBizUniqueTicketIdGenerator implements UniqueTicketIdGenerat
     public String getNewTicketId(final String prefix) {
     	String entityName = getEntityName(prefix);
         String ticketId = prefix + "-" + delegator.getNextSeqId(entityName);
-        LOGGER.info("New ticket id[{}] generated.", ticketId);
+        Debug.logInfo("New ticket id[" + ticketId + "] generated.", module);
         return ticketId;
     }
 
