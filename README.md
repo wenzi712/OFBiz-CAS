@@ -3,6 +3,14 @@
 
 # OFBiz-CAS Plugin
 
+OFBiz-CAS Plugin provides an OAuth 2.0 server in OFBiz.
+
+### Environment
+- JDK 17
+- OFBiz 22.01
+- CAS 5.3.15.1
+
+<br/>
 
 ### License
 [Apache License V2.0](LICENSE)
@@ -14,18 +22,13 @@ Welcome any kind of contributions to this plugin.
 
 <br/>
 
-### Environment
-This plugin is for OFBiz 17.12.03 with JDK 1.8.x, Tomcat 9.0.31 and CAS 5.3.15.1.
-
-<br/>
-
 ### Quick Start
 
-**1. Checkout OFBiz 17.12.03 from https://github.com/apache/ofbiz-framework**
+**1. Checkout OFBiz release22.01 from https://github.com/apache/ofbiz-framework**
 
 <br/>
 
-**2. Download this plugin**
+**2. Checkout this plugin**
 
 <br/>
 
@@ -37,10 +40,12 @@ This plugin is for OFBiz 17.12.03 with JDK 1.8.x, Tomcat 9.0.31 and CAS 5.3.15.1
 
 <br/>
 
-**5. Edit gradle/wrapper/gradle-wrapper.properties, change to use gradle 5.0:**
+**5. Edit build.gradle, add shibboleth maven repository:**
 
 ```
-distributionUrl=https\://services.gradle.org/distributions/gradle-5.0-bin.zip
+maven {
+    url "https://build.shibboleth.net/maven/releases/"
+}
 ```
 
 <br/>
@@ -128,9 +133,9 @@ After login successfully, you can see this page:
 
 **10. OAuth2 Grant Tests:**
 
-The OAuth2 grant supported as described in [https://apereo.github.io/cas/5.3.x/installation/OAuth-OpenId-Authentication.html](CAS document).
+The OAuth2 grant supported as described in [CAS document](https://apereo.github.io/cas/5.3.x/installation/OAuth-OpenId-Authentication.html).
 
-![oauth grants](https://alexbilbie.com/images/oauth-grants.svg)
+![oauth grants](docs/images/oauth-grants.svg)
 
 <br/>
 
@@ -263,7 +268,7 @@ There is an openapi-demo webapp to show how to use this plugin in openapi.
 
 **1. How to build webapp/cas-5.3.15.1 for this plugin**
 
-1.1 Check out [cas-overlay-template-ofbiz](https://github.com/langhua/cas-overlay-template-ofbiz/), select ofbiz-17.12.03-cas-5.3.15.1 tag.
+1.1 Check out [cas-overlay-template-ofbiz](https://github.com/langhua/cas-overlay-template-ofbiz/), select ofbiz-22.01-cas-5.3.15.1 tag.
 
 1.2 Run 'mvn clean package' to build target/cas-5.3.15.1, it's the webapp/cas-5.3.15.1 in this plugin.
 
@@ -273,31 +278,35 @@ There is an openapi-demo webapp to show how to use this plugin in openapi.
 
 **2. Why apply patches/ofbiz/startup-with-webapp-context.xml.patch**
 
-As you see, when deploying Apereo CAS in tomcat, the META-INF/context.xml is applied. In OFBiz 17.12.03, it's not. With patches/ofbiz/startup-with-webapp-context.xml.patch, META-INF/context.xml is configured, and then spring-boot and relative jars can be scanned and loaded as expected.
+As you see, when deploying Apereo CAS in tomcat, the META-INF/context.xml is applied. In OFBiz 22.01, it's not. With patches/ofbiz/startup-with-webapp-context.xml.patch, META-INF/context.xml is configured, and then spring-boot and relative jars can be scanned and loaded as expected.
 
 ```java
          StandardContext context = new StandardContext();
-+        String location = getWebappRootLocation(appInfo);
-+
-+        String contextXmlFilePath = new StringBuilder().append("file:///").append(location).append("/").append(Constants.ApplicationContextXml).toString();
-+        URL contextXmlUrl = null;
-+        try {
-+            contextXmlUrl = FlexibleLocation.resolveLocation(contextXmlFilePath);
-+            contextXmlFilePath = new StringBuilder().append(location).append("/").append(Constants.ApplicationContextXml).toString();
-+            File contextXmlFile = FileUtil.getFile(contextXmlFilePath);
-+            if(contextXmlFile.exists() && contextXmlFile.isFile()) { 
-+                Debug.logInfo(contextXmlFilePath + " found and will be loaded.", module);
-+                context.setConfigFile(contextXmlUrl);
-+            } else {
-+                // Debug.logInfo(contextXmlFilePath + " not found or not a file.", module);
-+            }
-+        } catch (MalformedURLException e) {
-+            Debug.logInfo(contextXmlFilePath+ " not found.", module);
-+        }
-+
-         Tomcat.initWebappDefaults(context);
- 
--        String location = getWebappRootLocation(appInfo);
+        +
+        +        String location = getWebappRootLocation(appInfo);
+        +
+        +        String contextXmlFilePath = new StringBuilder().append("file:///").append(location).append("/").append(Constants.ApplicationContextXml).toString();
+        +        URL contextXmlUrl = null;
+        +        try {
+        +            contextXmlUrl = FlexibleLocation.resolveLocation(contextXmlFilePath);
+        +            contextXmlFilePath = new StringBuilder().append(location).append("/").append(Constants.ApplicationContextXml).toString();
+        +            File contextXmlFile = FileUtil.getFile(contextXmlFilePath);
+        +            if(contextXmlFile.exists() && contextXmlFile.isFile()) {
+        +                Debug.logInfo(contextXmlFilePath + " found and will be loaded.", MODULE);
+        +                context.setConfigFile(contextXmlUrl);
+        +            } else {
+        +                // Debug.logInfo(contextXmlFilePath + " not found or not a file.", module);
+        +            }
+        +        } catch (MalformedURLException e) {
+        +            Debug.logInfo(contextXmlFilePath+ " not found.", MODULE);
+        +        }
+        +
+        context.setDefaultWebXml(System.getProperty("ofbiz.home") + "/framework/catalina/config/web.xml");
+        Tomcat.initWebappDefaults(context);
+
+        -        String location = getWebappRootLocation(appInfo);
+        +//        String location = getWebappRootLocation(appInfo);
+        boolean contextIsDistributable = isContextDistributable(configuration, appInfo);
 ```
 
 context.setConfigFile(contextXmlUrl) is the core line.
@@ -306,37 +315,18 @@ context.setConfigFile(contextXmlUrl) is the core line.
 
 **3. Why apply patches/ofbiz/build.gradle.patch**
 
-In this patch, rootProject.jvmArguments is exposed to submodule's build.gradle to extend or change them:
+In this patch, shibboleth repository is added:
 
 ```groovy
--List jvmArguments = ['-Xms128M', '-Xmx1024M']
-+ext.jvmArguments = ['-Xms128M', '-Xmx1024M']
-```
-
-and then in the build.gradle of OFBiz-CAS plugin, the rootProject.jvmArguments are extended:
-
-```groovy
-rootProject.jvmArguments.each { jvmArg ->
-    if (jvmArg && jvmArg.startsWith("-Dlog4j.configurationFile=")) {
-        originalLog4jConfig = jvmArg
-        if (!jvmArg.endsWith("=")) {
-            jvmArg += ","
-        }
-        log4jConfig = jvmArg + "log4j2-cas.xml"
-        findLogArg = true
-        return true
+         maven {
+             url "https://clojars.org/repo"
+         }
++        maven {
++            // net.shibboleth.tool:xmlsectool:2.0.0
++            url "https://build.shibboleth.net/maven/releases/"
++        }
     }
 }
-if (!findLogArg) {
-    rootProject.jvmArguments.add('-Dlog4j.configurationFile=log4j2.xml,log4j2-cas.xml')
-} else {
-    rootProject.jvmArguments.remove(originalLog4jConfig)
-    rootProject.jvmArguments.add(log4jConfig)
-}
-
-...
-rootProject.jvmArguments.add('-Dcas.standalone.configurationDirectory=plugins/cas/config')
-...
 ```
 
 <br/>
@@ -380,6 +370,21 @@ After input username admin, password ofbiz, an error page shown:
 
 
 <br/>
+
+### CAS Brief
+
+The Central Authentication Service (CAS) was developed at Yale University between 2000-2002.  In 2003, a release of the server core code was refactored in collaboration with Rutgers University and in 2004 we collectively placed the code in the public domain under the oversight of Jasig (later Apereo).
+
+Personally I think OAuth 2.0 is a simplified version of CAS protocol, as a service ticket of CAS protocol can be used only once, generally an OAuth 2.0 access token can be used for a period of time. This reduces the stress of token(ticket) generation/calculation dramatically.
+
+<br/>
+
+### References
+1. [OAuth 2.0](https://oauth.net/2/)
+2. [CAS](https://developers.yale.edu/cas-central-authentication-service)
+3. [Apereo CAS](https://www.apereo.org/projects/cas)
+
+<br/><br/>
 
 Thanks for reading this document.
 
